@@ -1,5 +1,4 @@
-# src/utils/data.py
-# Utilities for loading and querying the historical AQ dataset (podaciv2.xlsx)
+# Pomoćne funkcije za učitavanje i pripremu povijesnog skupa podataka (podaciv2.xlsx)
 
 from __future__ import annotations
 import os
@@ -9,59 +8,40 @@ from typing import List
 
 import pandas as pd
 
-# Base /data folder (same pattern you used in io.py)
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 DATA_FILE = os.path.join(DATA_DIR, "podaciv2.xlsx")
 
 
 def _clean_name(s: str) -> str:
-    """Rough equivalent of janitor::clean_names -> snake_case, ascii-ish."""
     s = s.strip().lower()
-    s = re.sub(r"[^\w\s]", "_", s)          # non-word to underscore
-    s = re.sub(r"\s+", "_", s)              # spaces to underscore
-    s = re.sub(r"_+", "_", s)               # collapse repeats
+    s = re.sub(r"[^\w\s]", "_", s)
+    s = re.sub(r"\s+", "_", s)
+    s = re.sub(r"_+", "_", s)
     return s.strip("_")
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=1)  # učitaj i keširaj dataset jednom (brže izvođenje)
 def load_viz_data() -> pd.DataFrame:
-    """
-    Load and clean podaciv2.xlsx once (cached).
-    - snake_case column names
-    - ensure 'grad' (city) exists and is string
-    - ensure 'datum' exists and is datetime64[ns]
-    - keep original numeric columns as-is (coerce where needed)
-    """
+    # Učitavanje i čišćenje podataka iz podaciv2.xlsx
     if not os.path.exists(DATA_FILE):
         raise FileNotFoundError(
-            f"Expected dataset at {DATA_FILE}. Copy podaciv2.xlsx into the /data folder."
+            f"Očekivani dataset nije pronađen: {DATA_FILE}. Kopiraj podaciv2.xlsx u /data mapu."
         )
 
     df = pd.read_excel(DATA_FILE)
 
-    # Clean column names (similar to janitor::clean_names)
+    # Očisti nazive stupaca
     df.columns = [_clean_name(c) for c in df.columns]
 
-    # Try to find date & city columns if names vary a bit
+    # Detekcija stupca za grad
     cols = set(df.columns)
-
-    # City column
-    city_col = None
-    for cand in ("grad", "city", "mjesto"):
-        if cand in cols:
-            city_col = cand
-            break
+    city_col = next((c for c in ("grad", "city", "mjesto") if c in cols), None)
     if city_col is None:
-        raise ValueError("Could not find a city column (expected one of: grad/city/mjesto).")
+        raise ValueError("Nije pronađen stupac za grad (očekuje se: grad/city/mjesto).")
 
-    # Date column
-    date_col = None
-    for cand in ("datum", "date", "dt"):
-        if cand in cols:
-            date_col = cand
-            break
+    # Detekcija stupca za datum
+    date_col = next((c for c in ("datum", "date", "dt") if c in cols), None)
     if date_col is None:
-        # Heuristic: first column that parses to many datetimes
         for c in df.columns:
             try:
                 parsed = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
@@ -72,23 +52,22 @@ def load_viz_data() -> pd.DataFrame:
             except Exception:
                 pass
         if date_col is None:
-            raise ValueError("Could not find a date column (expected: datum/date/dt).")
+            raise ValueError("Nije pronađen stupac za datum (očekuje se: datum/date/dt).")
 
-    # Standardize required columns
+    # Standardizacija imena
     if date_col != "datum":
         df = df.rename(columns={date_col: "datum"})
     if city_col != "grad":
         df = df.rename(columns={city_col: "grad"})
 
-    # Types
+    # Tipovi podataka
     df["grad"] = df["grad"].astype(str)
     df["datum"] = pd.to_datetime(df["datum"], errors="coerce")
 
-    # Drop rows without date
+    # Makni redove bez datuma
     df = df[df["datum"].notna()].copy()
 
-    # Optional: try to coerce typical numeric pollutant columns to numbers
-    # (non-numeric become NaN; commas handled)
+    # Pretvoriti vrijednosti polutanata u numerički oblik
     for c in df.columns:
         if c in ("datum", "grad"):
             continue
@@ -105,50 +84,44 @@ def load_viz_data() -> pd.DataFrame:
 
 
 def all_parameters(df: pd.DataFrame | None = None) -> List[str]:
-    """List of parameter columns (exclude 'datum' & 'grad')."""
+    #Lista svih parametara
     if df is None:
         df = load_viz_data()
     return [c for c in df.columns if c not in ("datum", "grad")]
 
 
 def countries_from_cities_table(cities_df: pd.DataFrame) -> List[str]:
-    """Helper if you want to reuse the cities Excel for country dropdowns."""
+    #Dohvaća listu država
     return sorted(cities_df["Country"].dropna().unique())
 
 
 def cities_for_country_in_viz(df: pd.DataFrame, country: str, df_cities: pd.DataFrame) -> List[str]:
-    """
-    Given viz data and the Country/City mapping table, return
-    city names available for a chosen country and also present in viz dataset.
-    """
+    #Dohvat gradoca
     if not country:
         return []
-    from src.utils.io import cities_for_country  # reuse existing helper
+    from src.utils.io import cities_for_country
     cities = set(cities_for_country(df_cities, country))
     present = set(df["grad"].unique())
     return sorted(cities & present)
 
 
 def years_available(df: pd.DataFrame | None = None) -> List[int]:
-    """Distinct years available in the dataset."""
+    #Vrati sve godine koje postoje u datasetu.
     if df is None:
         df = load_viz_data()
     return sorted(df["datum"].dt.year.dropna().astype(int).unique().tolist())
 
 
 def monthly_series(df: pd.DataFrame, city: str, params: List[str], year: int) -> pd.DataFrame:
-    """
-    Aggregate to monthly mean for a given city, parameters, and year.
-    Returns a long-form df: month, parameter, value
-    """
+    # Mjesecni prosjek
     x = df[df["grad"] == str(city)].copy()
     x["year"] = x["datum"].dt.year
     x = x[x["year"] == int(year)]
-    x["month"] = x["datum"].values.astype("datetime64[M]")  # floor to month
+    x["month"] = x["datum"].values.astype("datetime64[M]")  # zaokruži na mjesec
 
     keep = ["month"] + [p for p in params if p in x.columns]
     x = x[keep].groupby("month", as_index=False).mean()
 
-    # to long format
+    # long format
     out = x.melt(id_vars="month", var_name="parameter", value_name="value").dropna()
     return out.sort_values(["parameter", "month"])
