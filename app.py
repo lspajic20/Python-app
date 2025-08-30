@@ -5,7 +5,7 @@ from dash import Dash, dcc, html, Input, Output
 import dash_bootstrap_components as dbc
 
 from src.state.cache import init_cache          
-from src.pages import informacije, vizualizacije, karta
+from src.pages import informacije, vizualizacije, karta, predvidjanja
 
 # Kreiranje glavne Dash aplikacije uz Bootstrap temu
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -42,12 +42,15 @@ def route(path):
         return vizualizacije.layout
     if path == "/karta":
         return karta.layout
+    if path == "/predvidjanja":
+        return predvidjanja.layout
     return html.Div("404")
 
 # Registracija callbackova sa stranice "Informacije"
 informacije.register_callbacks(app)
 vizualizacije.register_callbacks(app)
 karta.register_callbacks(app)
+predvidjanja.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(debug=True) 
