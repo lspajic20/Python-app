@@ -1,0 +1,33 @@
+/* Top navbar color */
+.navbar {
+  background-color: #cbcaca !important;  /* dark gray-blue */
+}
+
+/* Sidebar links - default state */
+.nav-pills .nav-link {
+    color: #292929 !important;   /* dark gray instead of blue */
+    font-weight: 500;
+}
+
+/* Sidebar links - hover */
+.nav-pills .nav-link:hover {
+    color: #000000 !important;   /* black on hover */
+}
+
+/* Active sidebar link */
+.nav-pills .nav-link.active {
+    background-color: #cbcaca !important;  /* dark background */
+    color: #ffffff !important;             /* white text */
+}
+
+
+#map_refresh {
+    background-color: #9b9694 !important;  /* dark blue/gray */
+    border-color: #434343 !important;
+    color: #ffffff !important;  /* white text */
+}
+
+#map_refresh:hover {
+    background-color: #403f3f !important;  /* darker on hover */
+    border-color: #1a242f !important;
+}
